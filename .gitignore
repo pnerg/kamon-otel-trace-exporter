@@ -1,0 +1,47 @@
+*.class
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.ear
+
+# Ignore Eclipse files
+.project
+.classpath
+.prefs
+.settings
+
+# Ignore intellij project files
+.idea
+*.iml
+
+# automatic backup files
+*~
+
+# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+hs_err_pid*
+
+#Maven build dir
+/target/
+
+
+non-git/
+
+#Example code for the Wiki
+Examples.java
+
+# sbt specific
+.cache
+.cache-main
+.cache-tests
+.history
+.lib/
+dist/*
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
