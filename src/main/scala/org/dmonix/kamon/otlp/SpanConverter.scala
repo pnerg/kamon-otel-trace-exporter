@@ -1,17 +1,16 @@
 package org.dmonix.kamon.otlp
 
 import com.google.protobuf.ByteString
-import io.grpc.Attributes
 import io.opentelemetry.proto.common.v1.{AnyValue, InstrumentationLibrary, KeyValue}
 import io.opentelemetry.proto.resource.v1.Resource
 import io.opentelemetry.proto.trace.v1.{InstrumentationLibrarySpans, ResourceSpans, Status, Span => ProtoSpan}
 import kamon.trace.Span
 import kamon.trace.Span.Kind
-import kamon.util.Clock
 
 import java.time.Instant
-import java.util
+import java.util.Collections
 import java.util.concurrent.TimeUnit
+
 /**
  * Converts Kamon spans to OTLP Spans
  */
@@ -27,77 +26,22 @@ object SpanConverter {
       .addAttributes(stringKeyValue("telemetry.sdk.name", "kamon"))
       .addAttributes(stringKeyValue("telemetry.sdk.language", "scala"))
       .addAttributes(stringKeyValue("telemetry.sdk.version", kamonVersion))
-      .addAttributes(stringKeyValue("telemetry.sdk.version", kamonVersion))
-      .addAttributes(stringKeyValue("telemetry.sdk.version", kamonVersion))
       .build()
 
   // https://github.com/open-telemetry/opentelemetry-java/blob/main/exporters/otlp/common/src/main/java/io/opentelemetry/exporter/otlp/internal/SpanAdapter.java
 
-  /*
-    public static List<ResourceSpans> toProtoResourceSpans(Collection<SpanData> spanDataList) {
-    Map<Resource, Map<InstrumentationLibraryInfo, List<Span>>> resourceAndLibraryMap =
-        groupByResourceAndLibrary(spanDataList);
-    List<ResourceSpans> resourceSpans = new ArrayList<>(resourceAndLibraryMap.size());
-    for (Map.Entry<Resource, Map<InstrumentationLibraryInfo, List<Span>>> entryResource :
-        resourceAndLibraryMap.entrySet()) {
-      List<InstrumentationLibrarySpans> instrumentationLibrarySpans =
-          new ArrayList<>(entryResource.getValue().size());
-      for (Map.Entry<InstrumentationLibraryInfo, List<Span>> entryLibrary :
-          entryResource.getValue().entrySet()) {
-        instrumentationLibrarySpans.add(
-            InstrumentationLibrarySpans.newBuilder()
-                .setInstrumentationLibrary(
-                    CommonAdapter.toProtoInstrumentationLibrary(entryLibrary.getKey()))
-                .addAllSpans(entryLibrary.getValue())
-                .build());
-      }
-      resourceSpans.add(
-          ResourceSpans.newBuilder()
-              .setResource(ResourceAdapter.toProtoResource(entryResource.getKey()))
-              .addAllInstrumentationLibrarySpans(instrumentationLibrarySpans)
-              .build());
-    }
-    return resourceSpans;
-  }
-   */
   def toProtoResourceSpan(spans:Seq[Span.Finished]):ResourceSpans = {
 
     import collection.JavaConverters._
     val protoSpans = spans.map(toProtoSpan).asJava
 
-    val instrumentationLibrarySpans:InstrumentationLibrarySpans = InstrumentationLibrarySpans.newBuilder().setInstrumentationLibrary(instrumentationLibrary).addAllSpans(protoSpans).build()
-    val instrumentationLibrarySpansList = new util.ArrayList[InstrumentationLibrarySpans]()
-    instrumentationLibrarySpansList.add(instrumentationLibrarySpans)
+    val instrumentationLibrarySpans = InstrumentationLibrarySpans.newBuilder().setInstrumentationLibrary(instrumentationLibrary).addAllSpans(protoSpans).build()
 
     ResourceSpans.newBuilder()
       .setResource(resource)
-      .addAllInstrumentationLibrarySpans(instrumentationLibrarySpansList)
+      .addAllInstrumentationLibrarySpans(Collections.singletonList(instrumentationLibrarySpans))
       .build()
   }
-
-  /*
-   private static Map<Resource, Map<InstrumentationLibraryInfo, List<Span>>>
-      groupByResourceAndLibrary(Collection<SpanData> spanDataList) {
-    Map<Resource, Map<InstrumentationLibraryInfo, List<Span>>> result = new HashMap<>();
-    for (SpanData spanData : spanDataList) {
-      Resource resource = spanData.getResource();
-      Map<InstrumentationLibraryInfo, List<Span>> libraryInfoListMap =
-          result.get(spanData.getResource());
-      if (libraryInfoListMap == null) {
-        libraryInfoListMap = new HashMap<>();
-        result.put(resource, libraryInfoListMap);
-      }
-      List<Span> spanList = libraryInfoListMap.get(spanData.getInstrumentationLibraryInfo());
-      if (spanList == null) {
-        spanList = new ArrayList<>();
-        libraryInfoListMap.put(spanData.getInstrumentationLibraryInfo(), spanList);
-      }
-      spanList.add(toProtoSpan(spanData));
-    }
-    return result;
-  }
-
-   */
 
   private def toProtoSpan(span:Span.Finished):ProtoSpan = {
     val builder = ProtoSpan.newBuilder()
@@ -123,7 +67,7 @@ object SpanConverter {
     builder.build()
   }
 
-  private def toEpocNano(instant:Instant):Long = 0 //FIXME: Implement
+  private def toEpocNano(instant:Instant):Long = TimeUnit.NANOSECONDS.convert(instant.getEpochSecond, TimeUnit.SECONDS) + instant.getNano
 
   private def getStatus(span:Span.Finished):Status = {
     //according to the spec the deprecate code needs to be set for backwards compatibility reasons
@@ -148,27 +92,6 @@ object SpanConverter {
     }
   }
 
-  private def stringKeyValue(key:String, value:String):KeyValue = KeyValue.newBuilder().setKey("").setValue(AnyValue.newBuilder().setStringValue("").build()).build
+  private def stringKeyValue(key:String, value:String):KeyValue = KeyValue.newBuilder().setKey(key).setValue(AnyValue.newBuilder().setStringValue(value).build()).build
   private def kamonVersion:String = "x.x.x" //TODO pick the proper version from...somewhere
 }
-
-/*
-static Span toProtoSpan(SpanData spanData) {
-    final Span.Builder builder = Span.newBuilder();
-    spanData
-        .getAttributes()
-        .forEach((key, value) -> builder.addAttributes(CommonAdapter.toProtoAttribute(key, value)));
-    builder.setDroppedAttributesCount(
-        spanData.getTotalAttributeCount() - spanData.getAttributes().size());
-    for (EventData event : spanData.getEvents()) {
-      builder.addEvents(toProtoSpanEvent(event));
-    }
-    builder.setDroppedEventsCount(spanData.getTotalRecordedEvents() - spanData.getEvents().size());
-    for (LinkData link : spanData.getLinks()) {
-      builder.addLinks(toProtoSpanLink(link));
-    }
-    builder.setDroppedLinksCount(spanData.getTotalRecordedLinks() - spanData.getLinks().size());
-    builder.setStatus(toStatusProto(spanData.getStatus()));
-    return builder.build();
-  }
- */
