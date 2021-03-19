@@ -10,7 +10,7 @@ object Dependencies extends AutoPlugin {
      * ------------------------------
      */
     val `kamon-bundle` = "io.kamon" %% "kamon-bundle" % "2.1.12"
-    val `exporters-otlp` = "io.opentelemetry" % "opentelemetry-proto" % "0.9.1"
+    val `exporters-otlp` = "io.opentelemetry" % "opentelemetry-proto" % "0.17.1"
 
     /**
      * ------------------------------
