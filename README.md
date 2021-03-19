@@ -1,3 +1,4 @@
+[![Build & Test](https://github.com/pnerg/kamon-otlp-exporter/actions/workflows/scala.yml/badge.svg)](https://github.com/pnerg/kamon-otlp-exporter/actions/workflows/scala.yml)
 # kamon-otlp-exporter
 Provides a OpenTelemetry (OTLP) exporter for Kamon spans
 
