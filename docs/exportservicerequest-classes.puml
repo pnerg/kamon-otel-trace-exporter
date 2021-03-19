@@ -1,0 +1,68 @@
+@startuml
+class ExportServiceRequest
+class ResourceSpans
+class Resource {
+  uint32 dropped_attributes_count
+}
+class InstrumentationLibrarySpans
+
+class InstrumentationLibrary {
+  string name
+  string version
+}
+
+class Span{
+  bytes trace_id
+  bytes span_id
+  bytes parent_span_id
+  string name
+  enum SpanKind
+  fixed64 start_time_unix_nano
+  fixed64 end_time_unix_nano
+  uint32 dropped_attributes_count
+  uint32 dropped_events_count
+  uint32 dropped_links_count
+}
+
+class KeyValue{
+  string key
+  AnyValue value
+}
+
+class Event{
+  fixed64 time_unix_nano
+  string name
+  uint32 dropped_attributes_count
+}
+
+class Link {
+bytes trace_id
+bytes span_id
+string trace_state
+uint32 dropped_attributes_count
+}
+
+class Status {
+enum DeprecatedStatusCode
+string message
+enum StatusCode
+}
+
+ExportServiceRequest --* "*" ResourceSpans
+ResourceSpans --* Resource
+ResourceSpans  --* "*" InstrumentationLibrarySpans
+
+Resource --* "*" KeyValue
+
+InstrumentationLibrarySpans  --* InstrumentationLibrary
+InstrumentationLibrarySpans --* "*" Span
+Span --* "*" KeyValue
+Span --* "*" Event
+Span --* "*" Link
+Span --* Status
+
+Event --> "*" KeyValue
+Link --> "*" KeyValue
+
+
+@enduml
