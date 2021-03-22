@@ -19,31 +19,30 @@ sbt app/run
 
 This would log something like
 ```
-[main] INFO org.dmonix.kamon.otlp.OtlpGrpcReporter - Creating OTLP Trace Reporter
-[main] INFO org.dmonix.kamon.otlp.OtlpGrpcReporter - Configured endpoint for OTLP trace reporting [http://localhost:55690]
+[main] INFO org.dmonix.kamon.otlp.OpenTelemetryTraceReporter -  Creating OpenTelemetry Trace Reporter
+[main] INFO org.dmonix.kamon.otlp.OpenTelemetryTraceReporter - Configured endpoint for OTLP trace reporting [http://localhost:55690]
 ```
 and in the collector the received trace is logged
 ```
-2021-03-22T14:15:59.267Z        INFO    loggingexporter/logging_exporter.go:327 TracesExporter  {"#spans": 1}
-2021-03-22T14:15:59.267Z        DEBUG   loggingexporter/logging_exporter.go:366 ResourceSpans #0
+2021-03-22T19:37:19.675Z        INFO    loggingexporter/logging_exporter.go:327 TracesExporter  {"#spans": 1}
+2021-03-22T19:37:19.676Z        DEBUG   loggingexporter/logging_exporter.go:366 ResourceSpans #0
 Resource labels:
-     -> service.name: STRING(???)
-     -> service.version: STRING(x.x.x)
-     -> service.namespace: STRING(???)
-     -> service.instance.id: STRING(???)
+     -> service.name: STRING(otlp-test-app)
      -> telemetry.sdk.name: STRING(kamon)
      -> telemetry.sdk.language: STRING(scala)
-     -> telemetry.sdk.version: STRING(x.x.x)
+     -> telemetry.sdk.version: STRING(2.1.12)
 InstrumentationLibrarySpans #0
-InstrumentationLibrary kamon x.x.x
+InstrumentationLibrary kamon 2.1.12
 Span #0
-    Trace ID       : a5733dc6abc75acac17cf1313710dfa9
+    Trace ID       : cd44a103f4c4740385a62692087feb67
     Parent ID      : 
-    ID             : 39f5e8c32a24c411
+    ID             : 6fb5bee4fe5a8b83
     Name           : funky-query
     Kind           : SPAN_KIND_CLIENT
-    Start time     : 2021-03-22 14:15:54.234082437 +0000 UTC
-    End time       : 2021-03-22 14:15:54.447066076 +0000 UTC
+    Start time     : 2021-03-22 19:37:14.531087217 +0000 UTC
+    End time       : 2021-03-22 19:37:14.930654722 +0000 UTC
     Status code    : STATUS_CODE_OK
     Status message : 
+Attributes:
+     -> method: STRING(query)
 ```

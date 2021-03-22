@@ -4,25 +4,42 @@ import com.google.protobuf.ByteString
 import io.opentelemetry.proto.common.v1.{AnyValue, InstrumentationLibrary, KeyValue}
 import io.opentelemetry.proto.resource.v1.Resource
 import io.opentelemetry.proto.trace.v1.{InstrumentationLibrarySpans, ResourceSpans, Status, Span => ProtoSpan}
+import kamon.Kamon
+import kamon.tag.Tag
 import kamon.trace.Span
 import kamon.trace.Span.Kind
 
 import java.time.Instant
 import java.util.Collections
 import java.util.concurrent.TimeUnit
+object SpanConverter {
+  implicit class RichResourceBuilder(underlying: Resource.Builder) {
+    def addAttributes(name:String, value:Option[String]):Resource.Builder = {
+      value.map(stringKeyValue(name, _)).map(underlying.addAttributes) getOrElse underlying
+    }
+  }
 
+  private def anyKeyValue(key:String, value:AnyValue):KeyValue = KeyValue.newBuilder().setKey(key).setValue(value).build
+  private def stringKeyValue(key:String, value:String):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setStringValue(value).build())
+  private def booleanKeyValue(key:String, value:Boolean):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setBoolValue(value).build())
+  private def longKeyValue(key:String, value:Long):KeyValue = anyKeyValue(key,AnyValue.newBuilder().setIntValue(value).build())
+
+  private val kamonVersion = Kamon.status().settings().version
+}
+
+import SpanConverter._
 /**
  * Converts Kamon spans to OTLP Spans
  */
-object SpanConverter {
+class SpanConverter(serviceName:String, serviceVersion:Option[String], serviceNamespace:Option[String], serviceInstanceId:Option[String]) {
 
   private val instrumentationLibrary:InstrumentationLibrary = InstrumentationLibrary.newBuilder().setName("kamon").setVersion(kamonVersion).build()
 
   private val resource = Resource.newBuilder()
-      .addAttributes(stringKeyValue("service.name", "???")) //TODO pick service name from config
-      .addAttributes(stringKeyValue("service.version", "x.x.x")) //TODO pick service version from config...or somewhere
-      .addAttributes(stringKeyValue("service.namespace", "???")) //TODO make it possible to configure the namespace (e.g kubernetes namespace)
-      .addAttributes(stringKeyValue("service.instance.id", "???")) //TODO make it possible to configure the identity (e.g kubernetes pod id)
+      .addAttributes(stringKeyValue("service.name", serviceName)) //TODO pick service name from config
+      .addAttributes("service.version", serviceVersion) //TODO pick service version from config...or somewhere
+      .addAttributes("service.namespace", serviceNamespace) //TODO make it possible to configure the namespace (e.g kubernetes namespace)
+      .addAttributes("service.instance.id", serviceInstanceId) //TODO make it possible to configure the identity (e.g kubernetes pod id)
       .addAttributes(stringKeyValue("telemetry.sdk.name", "kamon"))
       .addAttributes(stringKeyValue("telemetry.sdk.language", "scala"))
       .addAttributes(stringKeyValue("telemetry.sdk.version", kamonVersion))
@@ -47,6 +64,9 @@ object SpanConverter {
     val builder = ProtoSpan.newBuilder()
     ByteString.copyFrom(span.trace.id.bytes)
 
+    import collection.JavaConverters._
+    val attributes = span.tags.iterator.map(toProtoKeyValue).toList.asJava
+
     builder
       .setTraceId(ByteString.copyFrom(span.trace.id.bytes))
       .setSpanId(ByteString.copyFrom(span.id.bytes))
@@ -55,6 +75,7 @@ object SpanConverter {
       .setStartTimeUnixNano(toEpocNano(span.from))
       .setEndTimeUnixNano(toEpocNano(span.to))
       .setStatus(getStatus(span))
+      .addAllAttributes(attributes) //TODO add all tags
 
     //TODO add links if such exists in the Kamon span
 
@@ -92,6 +113,12 @@ object SpanConverter {
     }
   }
 
-  private def stringKeyValue(key:String, value:String):KeyValue = KeyValue.newBuilder().setKey(key).setValue(AnyValue.newBuilder().setStringValue(value).build()).build
-  private def kamonVersion:String = "x.x.x" //TODO pick the proper version from...somewhere
+  private def toProtoKeyValue(tag: Tag):KeyValue = {
+    tag match {
+      case t: Tag.String  => stringKeyValue(tag.key, t.value)
+      case t: Tag.Boolean => booleanKeyValue(tag.key, t.value)
+      case t: Tag.Long    => longKeyValue(tag.key, t.value)
+    }
+  }
+
 }
