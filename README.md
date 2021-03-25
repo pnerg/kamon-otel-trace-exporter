@@ -31,6 +31,10 @@ Resource labels:
      -> telemetry.sdk.name: STRING(kamon)
      -> telemetry.sdk.language: STRING(scala)
      -> telemetry.sdk.version: STRING(2.1.12)
+     -> service.instance.id: STRING(xxx-yyy)
+     -> env: STRING(staging)
+     -> service.namespace: STRING(namespace-1)
+     -> service.version: STRING(x.x.x)
 InstrumentationLibrarySpans #0
 InstrumentationLibrary kamon 2.1.12
 Span #0

@@ -20,16 +20,21 @@ import com.typesafe.config.Config
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import io.opentelemetry.proto.collector.trace.v1.TraceServiceGrpc.TraceServiceFutureStub
 import io.opentelemetry.proto.collector.trace.v1.{ExportTraceServiceRequest, ExportTraceServiceResponse, TraceServiceGrpc}
+import io.opentelemetry.proto.common.v1.InstrumentationLibrary
+import io.opentelemetry.proto.resource.v1.Resource
+import io.opentelemetry.proto.trace.v1.ResourceSpans
+import kamon.Kamon
 import kamon.module.{Module, ModuleFactory, SpanReporter}
 import kamon.trace.Span
 import org.slf4j.LoggerFactory
 
-import java.net.URI
 import java.util.Collections
 import java.util.concurrent.{Executors, ThreadFactory, TimeUnit}
+import SpanConverter._
 
 object OpenTelemetryTraceReporter {
   private val logger = LoggerFactory.getLogger(classOf[OpenTelemetryTraceReporter])
+  private val kamonVersion = Kamon.status().settings().version
 
   class Factory extends ModuleFactory {
     override def create(settings: ModuleFactory.Settings): Module = {
@@ -43,7 +48,7 @@ object OpenTelemetryTraceReporter {
 
 }
 
-import OpenTelemetryTraceReporter._
+import org.dmonix.kamon.otel.OpenTelemetryTraceReporter._
 class OpenTelemetryTraceReporter extends SpanReporter {
   private val executor = Executors.newSingleThreadExecutor(new ThreadFactory {
     override def newThread(r: Runnable): Thread = new Thread(r, "OpenTelemetryTraceReporterRemote")
@@ -51,11 +56,11 @@ class OpenTelemetryTraceReporter extends SpanReporter {
 
   private var traceService:TraceServiceFutureStub = null
   private var channel:ManagedChannel = null
-  private var spanConverter:SpanConverter = null
+  private var spanConverterFunc:Seq[Span.Finished]=>ResourceSpans = null
 
   override def reportSpans(spans: Seq[Span.Finished]): Unit = {
     if(!spans.isEmpty) {
-      val resources = Collections.singletonList(spanConverter.toProtoResourceSpan(spans)) //all spans should belong to the same single resource
+      val resources = Collections.singletonList(spanConverterFunc(spans)) //all spans should belong to the same single resource
       val exportTraceServiceRequest = ExportTraceServiceRequest.newBuilder()
         .addAllResourceSpans(resources)
         .build()
@@ -64,27 +69,26 @@ class OpenTelemetryTraceReporter extends SpanReporter {
   }
 
   override def reconfigure(newConfig: Config): Unit = {
-
-    val serviceName = newConfig.getString("kamon.environment.service")
-    val serviceVersion:Option[String] = None //TODO make it possible to configure the service version
-    val serviceNamespace:Option[String] = None //TODO make it possible to configure the namespace (e.g kubernetes namespace)
-    val serviceInstanceId:Option[String]= None //TODO make it possible to configure the identity (e.g kubernetes pod id)
-    this.spanConverter = new SpanConverter(serviceName, serviceVersion, serviceNamespace, serviceInstanceId)
-
     //inspiration from https://github.com/open-telemetry/opentelemetry-java/blob/main/exporters/otlp/trace/src/main/java/io/opentelemetry/exporter/otlp/trace/OtlpGrpcSpanExporterBuilder.java
-    val configRoot = newConfig.getConfig("kamon.otel.trace")
-    val endPoint = URI.create(configRoot.getString("url"))
-    val host = configRoot.getString("host")
-    val port = configRoot.getInt("port")
-    logger.info(s"Configured endpoint for OTLP trace reporting [$endPoint]")
+    val otelExporterConfig = newConfig.getConfig("kamon.otel.trace")
+    val host = otelExporterConfig.getString("host")
+    val port = otelExporterConfig.getInt("port")
+    val protocol = otelExporterConfig.getString("protocol")
+
+    //pre-generate the function for converting Kamon span to proto span
+    val instrumentationLibrary:InstrumentationLibrary = InstrumentationLibrary.newBuilder().setName("kamon").setVersion(kamonVersion).build()
+    val resource:Resource = buildResource(otelExporterConfig.getBoolean("include-environment-tags"))
+    this.spanConverterFunc =  SpanConverter.toProtoResourceSpan(resource, instrumentationLibrary)
+
+    logger.info(s"Configured endpoint for OTLP trace reporting [$host:$port]")
     //TODO : stuff with TLS and possibly time-out settings...and other things I've missed
     val builder = ManagedChannelBuilder.forAddress(host, port)
-    if (endPoint.getScheme().equals("https"))
+    if (protocol.equals("https"))
       builder.useTransportSecurity()
     else
       builder.usePlaintext()
 
-    channel = builder.build()
+    this.channel = builder.build()
     this.traceService = TraceServiceGrpc.newFutureStub(channel);
   }
 
@@ -99,6 +103,22 @@ class OpenTelemetryTraceReporter extends SpanReporter {
 
     //TODO is there result for which a retry is relevant? Perhaps a glitch in the receiving service
     override def onFailure(t: Throwable): Unit = logger.error("Failed to export traces", t)
+  }
+
+  private def buildResource(includeEnvTags:Boolean):Resource = {
+    val env = Kamon.environment
+    val builder = Resource.newBuilder()
+      .addAttributes(stringKeyValue("service.name", env.service))
+      .addAttributes(stringKeyValue("telemetry.sdk.name", "kamon"))
+      .addAttributes(stringKeyValue("telemetry.sdk.language", "scala"))
+      .addAttributes(stringKeyValue("telemetry.sdk.version", kamonVersion))
+
+    //add all kamon.environment.tags as KeyValues to the Resource object
+    if(includeEnvTags) {
+      env.tags.iterator().map(toProtoKeyValue).foreach(builder.addAttributes)
+    }
+
+    builder.build()
   }
 }
 

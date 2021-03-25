@@ -19,50 +19,28 @@ import com.google.protobuf.ByteString
 import io.opentelemetry.proto.common.v1.{AnyValue, InstrumentationLibrary, KeyValue}
 import io.opentelemetry.proto.resource.v1.Resource
 import io.opentelemetry.proto.trace.v1.{InstrumentationLibrarySpans, ResourceSpans, Status, Span => ProtoSpan}
-import kamon.Kamon
 import kamon.tag.Tag
-import kamon.trace.{Identifier, Span}
+import kamon.tag.Tag.unwrapValue
 import kamon.trace.Span.Kind
+import kamon.trace.{Identifier, Span}
+import org.slf4j.LoggerFactory
 
 import java.time.Instant
 import java.util.Collections
 import java.util.concurrent.TimeUnit
-private[otel] object SpanConverter {
-  implicit class RichResourceBuilder(underlying: Resource.Builder) {
-    def addAttributes(name:String, value:Option[String]):Resource.Builder = {
-      value.map(stringKeyValue(name, _)).map(underlying.addAttributes) getOrElse underlying
-    }
-  }
 
-  private def anyKeyValue(key:String, value:AnyValue):KeyValue = KeyValue.newBuilder().setKey(key).setValue(value).build
-  private def stringKeyValue(key:String, value:String):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setStringValue(value).build())
-  private def booleanKeyValue(key:String, value:Boolean):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setBoolValue(value).build())
-  private def longKeyValue(key:String, value:Long):KeyValue = anyKeyValue(key,AnyValue.newBuilder().setIntValue(value).build())
-
-  private val kamonVersion = Kamon.status().settings().version
-}
-
-import SpanConverter._
 /**
  * Converts Kamon spans to OTel Spans
  */
-private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[String], serviceNamespace:Option[String], serviceInstanceId:Option[String]) {
+private[otel] object SpanConverter {
+  private val logger = LoggerFactory.getLogger(SpanConverter.getClass)
 
-  private val instrumentationLibrary:InstrumentationLibrary = InstrumentationLibrary.newBuilder().setName("kamon").setVersion(kamonVersion).build()
+  private[otel] def anyKeyValue(key:String, value:AnyValue):KeyValue = KeyValue.newBuilder().setKey(key.replaceAll("-", ".")).setValue(value).build
+  private[otel] def stringKeyValue(key:String, value:String):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setStringValue(value).build())
+  private[otel] def booleanKeyValue(key:String, value:Boolean):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setBoolValue(value).build())
+  private[otel] def longKeyValue(key:String, value:Long):KeyValue = anyKeyValue(key,AnyValue.newBuilder().setIntValue(value).build())
 
-  private val resource = Resource.newBuilder()
-      .addAttributes(stringKeyValue("service.name", serviceName))
-      .addAttributes("service.version", serviceVersion)
-      .addAttributes("service.namespace", serviceNamespace)
-      .addAttributes("service.instance.id", serviceInstanceId)
-      .addAttributes(stringKeyValue("telemetry.sdk.name", "kamon"))
-      .addAttributes(stringKeyValue("telemetry.sdk.language", "scala"))
-      .addAttributes(stringKeyValue("telemetry.sdk.version", kamonVersion))
-      .build()
-
-  // https://github.com/open-telemetry/opentelemetry-java/blob/main/exporters/otlp/common/src/main/java/io/opentelemetry/exporter/otlp/internal/SpanAdapter.java
-
-  def toProtoResourceSpan(spans:Seq[Span.Finished]):ResourceSpans = {
+  private[otel] def toProtoResourceSpan(resource:Resource, instrumentationLibrary:InstrumentationLibrary)(spans:Seq[Span.Finished]):ResourceSpans = {
 
     import collection.JavaConverters._
     val protoSpans = spans.map(toProtoSpan)
@@ -83,7 +61,7 @@ private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[Stri
    * @param span
    * @return
    */
-  private def toProtoSpan(span:Span.Finished):ProtoSpan = {
+  private[otel] def toProtoSpan(span:Span.Finished):ProtoSpan = {
     val builder = ProtoSpan.newBuilder()
     ByteString.copyFrom(span.trace.id.bytes)
 
@@ -123,9 +101,9 @@ private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[Stri
    * @param instant
    * @return
    */
-  private def toEpocNano(instant:Instant):Long = TimeUnit.NANOSECONDS.convert(instant.getEpochSecond, TimeUnit.SECONDS) + instant.getNano
+  private[otel] def toEpocNano(instant:Instant):Long = TimeUnit.NANOSECONDS.convert(instant.getEpochSecond, TimeUnit.SECONDS) + instant.getNano
 
-  private def getStatus(span:Span.Finished):Status = {
+  private[otel] def getStatus(span:Span.Finished):Status = {
     //according to the spec the deprecate code needs to be set for backwards compatibility reasons
     //https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/trace/v1/trace.proto
     val (status, deprecatedStatus) = if(span.hasError) (Status.StatusCode.STATUS_CODE_ERROR_VALUE, Status.DeprecatedStatusCode.DEPRECATED_STATUS_CODE_UNKNOWN_ERROR_VALUE) else (Status.StatusCode.STATUS_CODE_OK_VALUE, Status.DeprecatedStatusCode.DEPRECATED_STATUS_CODE_OK_VALUE)
@@ -141,7 +119,7 @@ private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[Stri
    * @param kind
    * @return
    */
-  private def toProtoKind(kind:Kind): ProtoSpan.SpanKind = {
+  private[otel] def toProtoKind(kind:Kind): ProtoSpan.SpanKind = {
     kind match {
       case Kind.Client => ProtoSpan.SpanKind.SPAN_KIND_CLIENT
       case Kind.Consumer => ProtoSpan.SpanKind.SPAN_KIND_CONSUMER
@@ -158,11 +136,15 @@ private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[Stri
    * @param tag
    * @return
    */
-  private def toProtoKeyValue(tag: Tag):KeyValue = {
+  private[otel] def toProtoKeyValue(tag: Tag):KeyValue = {
     tag match {
       case t: Tag.String  => stringKeyValue(tag.key, t.value)
       case t: Tag.Boolean => booleanKeyValue(tag.key, t.value)
       case t: Tag.Long    => longKeyValue(tag.key, t.value)
+      case _ => { //this cannot happen unless new Tag types are added to Kamon core, the code is more of a safeguard for "just in case"
+        logger.warn(s"Failed to map Tag [$tag] to a KeyValue type, will attempt to convert to a string")
+        stringKeyValue(tag.key, unwrapValue(tag).toString) //last resort trying to create a string of this unknown Tag type
+      }
     }
   }
 
@@ -171,7 +153,7 @@ private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[Stri
    * @param link
    * @return
    */
-  private def toProtoLink(link:Span.Link):ProtoSpan.Link = {
+  private[otel] def toProtoLink(link:Span.Link):ProtoSpan.Link = {
     ProtoSpan.Link.newBuilder()
       .setTraceId(toByteString(link.trace.id))
       .setSpanId(toByteString(link.spanId))
@@ -183,5 +165,5 @@ private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[Stri
    * @param id
    * @return
    */
-  private def toByteString(id:Identifier):ByteString = ByteString.copyFrom(id.bytes)
+  private[otel] def toByteString(id:Identifier):ByteString = ByteString.copyFrom(id.bytes)
 }
