@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package org.dmonix.kamon.otlp
+package org.dmonix.kamon.otel
 
 import com.google.protobuf.ByteString
 import io.opentelemetry.proto.common.v1.{AnyValue, InstrumentationLibrary, KeyValue}
@@ -27,7 +27,7 @@ import kamon.trace.Span.Kind
 import java.time.Instant
 import java.util.Collections
 import java.util.concurrent.TimeUnit
-private[otlp] object SpanConverter {
+private[otel] object SpanConverter {
   implicit class RichResourceBuilder(underlying: Resource.Builder) {
     def addAttributes(name:String, value:Option[String]):Resource.Builder = {
       value.map(stringKeyValue(name, _)).map(underlying.addAttributes) getOrElse underlying
@@ -44,9 +44,9 @@ private[otlp] object SpanConverter {
 
 import SpanConverter._
 /**
- * Converts Kamon spans to OTLP Spans
+ * Converts Kamon spans to OTel Spans
  */
-private[otlp] class SpanConverter(serviceName:String, serviceVersion:Option[String], serviceNamespace:Option[String], serviceInstanceId:Option[String]) {
+private[otel] class SpanConverter(serviceName:String, serviceVersion:Option[String], serviceNamespace:Option[String], serviceInstanceId:Option[String]) {
 
   private val instrumentationLibrary:InstrumentationLibrary = InstrumentationLibrary.newBuilder().setName("kamon").setVersion(kamonVersion).build()
 

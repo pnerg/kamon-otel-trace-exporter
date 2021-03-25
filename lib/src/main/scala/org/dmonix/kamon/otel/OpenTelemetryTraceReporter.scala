@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-package org.dmonix.kamon.otlp
+package org.dmonix.kamon.otel
 
 import com.google.common.util.concurrent.{FutureCallback, Futures}
 import com.typesafe.config.Config
@@ -43,7 +43,7 @@ object OpenTelemetryTraceReporter {
 
 }
 
-import org.dmonix.kamon.otlp.OpenTelemetryTraceReporter._
+import OpenTelemetryTraceReporter._
 class OpenTelemetryTraceReporter extends SpanReporter {
   private val executor = Executors.newSingleThreadExecutor(new ThreadFactory {
     override def newThread(r: Runnable): Thread = new Thread(r, "OpenTelemetryTraceReporterRemote")
@@ -72,7 +72,7 @@ class OpenTelemetryTraceReporter extends SpanReporter {
     this.spanConverter = new SpanConverter(serviceName, serviceVersion, serviceNamespace, serviceInstanceId)
 
     //inspiration from https://github.com/open-telemetry/opentelemetry-java/blob/main/exporters/otlp/trace/src/main/java/io/opentelemetry/exporter/otlp/trace/OtlpGrpcSpanExporterBuilder.java
-    val configRoot = newConfig.getConfig("kamon.otlp.trace")
+    val configRoot = newConfig.getConfig("kamon.otel.trace")
     val endPoint = URI.create(configRoot.getString("url"))
     val host = configRoot.getString("host")
     val port = configRoot.getInt("port")

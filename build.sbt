@@ -6,7 +6,7 @@ publishArtifact := false
 
 val baseSettings = Seq(
       organization  := "org.dmonix.kamon",
-      version := "0.1.0",
+      version := "1.0.0-SNAPSHOT",
       scalaVersion := "2.13.5",
       crossScalaVersions := Seq("2.11.12", "2.12.12", "2.13.5")
 )
@@ -29,7 +29,7 @@ lazy val app = (project in file("app"))
     name := "kamon-otlp-testapp",
     publishArtifact := false,
     fork := true, //make sure we fork before running or else java options won't be set
-    mainClass in (Compile, run) := Some("org.dmonix.kamon.otlp.Main"),
+    mainClass in (Compile, run) := Some("org.dmonix.kamon.otel.Main"),
     run / javaOptions ++= Seq(
       "-Xmx256m",
       "-Xss256k",

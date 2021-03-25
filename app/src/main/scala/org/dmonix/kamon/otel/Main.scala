@@ -1,4 +1,4 @@
-package org.dmonix.kamon.otlp
+package org.dmonix.kamon.otel
 
 import com.typesafe.config.ConfigFactory
 import kamon.Kamon
