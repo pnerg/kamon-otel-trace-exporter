@@ -1,5 +1,5 @@
 [![Build & Test](https://github.com/pnerg/kamon-otlp-exporter/actions/workflows/scala.yml/badge.svg)](https://github.com/pnerg/kamon-otlp-exporter/actions/workflows/scala.yml)
-# kamon-otlp-exporter
+# Kamon OpenTelemetry Trace Exporter
 Provides a OpenTelemetry (OTLP) exporter for Kamon spans
 
 The reporter relies on the [opentelemetry-proto](https://github.com/open-telemetry/opentelemetry-proto) library for the gRPC communication with an OpenTelemetry (OTLP) service.
@@ -19,8 +19,8 @@ sbt app/run
 
 This would log something like
 ```
-[main] INFO org.dmonix.kamon.otlp.OpenTelemetryTraceReporter -  Creating OpenTelemetry Trace Reporter
-[main] INFO org.dmonix.kamon.otlp.OpenTelemetryTraceReporter - Configured endpoint for OTLP trace reporting [http://localhost:55690]
+[main] INFO org.dmonix.kamon.otel.OpenTelemetryTraceReporter -  Creating OpenTelemetry Trace Reporter
+[main] INFO org.dmonix.kamon.otel.OpenTelemetryTraceReporter - Configured endpoint for OTLP trace reporting [http://localhost:55690]
 ```
 and in the collector the received spans are logged
 ```

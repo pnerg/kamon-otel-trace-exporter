@@ -6,7 +6,7 @@ publishArtifact := false
 
 val baseSettings = Seq(
       organization  := "org.dmonix.kamon",
-      version := "1.0.0-SNAPSHOT",
+      version := "0.5.0-SNAPSHOT",
       scalaVersion := "2.13.5",
       crossScalaVersions := Seq("2.11.12", "2.12.12", "2.13.5")
 )
@@ -14,7 +14,7 @@ val baseSettings = Seq(
 lazy val lib = (project in file("lib"))
   .settings(baseSettings)
   .settings(
-        name := "kamon-otlp-trace-exporter",
+        name := "kamon-otel-trace-exporter",
           libraryDependencies ++= Seq(
           `kamon-bundle`,
           `exporters-otlp`,
@@ -26,7 +26,7 @@ lazy val lib = (project in file("lib"))
 lazy val app = (project in file("app"))
   .settings(baseSettings)
   .settings(
-    name := "kamon-otlp-testapp",
+    name := "kamon-otel-testapp",
     publishArtifact := false,
     fork := true, //make sure we fork before running or else java options won't be set
     mainClass in (Compile, run) := Some("org.dmonix.kamon.otel.Main"),
