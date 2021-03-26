@@ -32,6 +32,8 @@ import java.util.Collections
 import java.util.concurrent.{Executors, ThreadFactory, TimeUnit}
 import SpanConverter._
 
+import java.net.URL
+
 object OpenTelemetryTraceReporter {
   private val logger = LoggerFactory.getLogger(classOf[OpenTelemetryTraceReporter])
   private val kamonVersion = Kamon.status().settings().version
@@ -74,15 +76,18 @@ class OpenTelemetryTraceReporter extends SpanReporter {
     val host = otelExporterConfig.getString("host")
     val port = otelExporterConfig.getInt("port")
     val protocol = otelExporterConfig.getString("protocol")
+    val endpoint = otelExporterConfig.getString("endpoint")
+    val url = new URL(endpoint)
 
     //pre-generate the function for converting Kamon span to proto span
     val instrumentationLibrary:InstrumentationLibrary = InstrumentationLibrary.newBuilder().setName("kamon").setVersion(kamonVersion).build()
     val resource:Resource = buildResource(otelExporterConfig.getBoolean("include-environment-tags"))
     this.spanConverterFunc =  SpanConverter.toProtoResourceSpan(resource, instrumentationLibrary)
 
-    logger.info(s"Configured endpoint for OTLP trace reporting [$host:$port]")
+    logger.info(s"Configured endpoint for OTLP trace reporting [${url.getHost}:${url.getPort}]")
     //TODO : stuff with TLS and possibly time-out settings...and other things I've missed
-    val builder = ManagedChannelBuilder.forAddress(host, port)
+    //val builder = ManagedChannelBuilder.forTarget(endpoint)
+    val builder = ManagedChannelBuilder.forAddress(url.getHost, url.getPort)
     if (protocol.equals("https"))
       builder.useTransportSecurity()
     else

@@ -83,7 +83,6 @@ private[otel] object SpanConverter {
       .addAllAttributes(attributes.asJava)
       .addAllLinks(links.asJava)
 
-
     //TODO add set traceState once we have something to set. Need w3c context
     //It is a trace_state in w3c-trace-context format: https://www.w3.org/TR/trace-context/#tracestate-header
     //See also https://github.com/w3c/distributed-tracing for more details about this field.
@@ -125,7 +124,7 @@ private[otel] object SpanConverter {
       case Kind.Consumer => ProtoSpan.SpanKind.SPAN_KIND_CONSUMER
       case Kind.Internal => ProtoSpan.SpanKind.SPAN_KIND_INTERNAL
       case Kind.Producer => ProtoSpan.SpanKind.SPAN_KIND_PRODUCER
-      case Kind.Server => ProtoSpan.SpanKind.SPAN_KIND_PRODUCER
+      case Kind.Server => ProtoSpan.SpanKind.SPAN_KIND_SERVER
       case Kind.Unknown => ProtoSpan.SpanKind.SPAN_KIND_UNSPECIFIED
       case _ => ProtoSpan.SpanKind.UNRECOGNIZED
     }
@@ -157,6 +156,7 @@ private[otel] object SpanConverter {
     ProtoSpan.Link.newBuilder()
       .setTraceId(toByteString(link.trace.id))
       .setSpanId(toByteString(link.spanId))
+      //.setTraceState() //TODO add when this becomes accessible in Kamon
       .build()
   }
 

@@ -19,6 +19,7 @@ object Dependencies extends AutoPlugin {
      * ------------------------------
      */
     val `slf4j-simple` = "org.slf4j" % "slf4j-simple" % "1.7.30"
+    val scalatest = "org.scalatest" %% "scalatest" % "3.0.8" // scala-steward:off , using same version as Kamon, will make the future PR easier
   }
 
 }

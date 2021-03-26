@@ -5,10 +5,10 @@ name := "kamon-otlp"
 publishArtifact := false
 
 val baseSettings = Seq(
-      organization  := "org.dmonix.kamon",
-      version := "0.5.0-SNAPSHOT",
-      scalaVersion := "2.13.5",
-      crossScalaVersions := Seq("2.11.12", "2.12.12", "2.13.5")
+  organization  := "org.dmonix.kamon",
+  version := "0.5.0-SNAPSHOT",
+  scalaVersion := "2.13.5",
+  crossScalaVersions := Seq("2.11.12", "2.12.12", "2.13.5"),
 )
 
 lazy val lib = (project in file("lib"))
@@ -18,9 +18,9 @@ lazy val lib = (project in file("lib"))
           libraryDependencies ++= Seq(
           `kamon-bundle`,
           `exporters-otlp`,
-          `grpc-netty`
+          `grpc-netty`,
+            scalatest % Test
         )
-
   )
 
 lazy val app = (project in file("app"))
@@ -36,6 +36,7 @@ lazy val app = (project in file("app"))
       "-XX:+CrashOnOutOfMemoryError",
       "-XX:MaxMetaspaceSize=128m",
       "-Dkanela.show-banner=false",
+      "-DOTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:55690"
     ),
     libraryDependencies ++= Seq(
       `slf4j-simple`
