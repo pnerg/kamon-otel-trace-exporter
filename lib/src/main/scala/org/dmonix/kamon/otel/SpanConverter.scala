@@ -35,6 +35,9 @@ import java.util.concurrent.TimeUnit
 private[otel] object SpanConverter {
   private val logger = LoggerFactory.getLogger(SpanConverter.getClass)
 
+  /** 8-bytes worth of zeroes used to pad 8-byte TraceId's  */
+  private val eightBytePad = Array.fill[Byte](8)(0)
+
   private[otel] def anyKeyValue(key:String, value:AnyValue):KeyValue = KeyValue.newBuilder().setKey(key.replaceAll("-", ".")).setValue(value).build
   private[otel] def stringKeyValue(key:String, value:String):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setStringValue(value).build())
   private[otel] def booleanKeyValue(key:String, value:Boolean):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setBoolValue(value).build())
@@ -73,8 +76,8 @@ private[otel] object SpanConverter {
 
     import collection.JavaConverters._
     builder
-      .setTraceId(toByteString(span.trace.id))
-      .setSpanId(toByteString(span.id))
+      .setTraceId(toByteString(span.trace.id, true))
+      .setSpanId(toByteString(span.id, false))
       .setName(span.operationName)
       .setKind(toProtoKind(span.kind))
       .setStartTimeUnixNano(toEpocNano(span.from))
@@ -154,16 +157,24 @@ private[otel] object SpanConverter {
    */
   private[otel] def toProtoLink(link:Span.Link):ProtoSpan.Link = {
     ProtoSpan.Link.newBuilder()
-      .setTraceId(toByteString(link.trace.id))
-      .setSpanId(toByteString(link.spanId))
+      .setTraceId(toByteString(link.trace.id, true))
+      .setSpanId(toByteString(link.spanId, false))
       //.setTraceState() //TODO add when this becomes accessible in Kamon
       .build()
   }
 
   /**
    * Converts a Kamon identifier to a proto ByteString
-   * @param id
+   * @param id The identifier to convert
+   * @param padTo16bytes If the identifier should be padded in case it is 8-bytes (used for traceid's)
    * @return
    */
-  private[otel] def toByteString(id:Identifier):ByteString = ByteString.copyFrom(id.bytes)
+  private[otel] def toByteString(id:Identifier, padTo16bytes:Boolean):ByteString = {
+    val bytes = id.bytes
+    //OTLP requires 16-bytes trace identifiers, so if we a 8-byte trace id we need to pad with zeroes
+    if(padTo16bytes && id.bytes.length == 8)
+      ByteString.copyFrom(eightBytePad++bytes)
+    else
+      ByteString.copyFrom(bytes)
+  }
 }

@@ -86,7 +86,30 @@ class SpanConverterSpec extends WordSpec with Matchers {
     val trace = Trace(traceId, SamplingDecision.Sample)
     val link = Span.Link(Link.Kind.FollowsFrom, trace, spanId)
     val protoLink = toProtoLink(link)
-    protoLink.getTraceId shouldEqual toByteString(traceId)
-    protoLink.getSpanId shouldEqual toByteString(spanId)
+    protoLink.getTraceId shouldEqual toByteString(traceId, true)
+    protoLink.getSpanId shouldEqual toByteString(spanId, false)
+  }
+
+  "converting a Kamon identifier to a proto bytestring" should {
+    "return a 16 byte array for a 16 byte identifier, padding enabled" in {
+      val id = traceIDFactory.generate()
+      toByteString(id, true).toByteArray.length shouldBe 16
+      toByteString(id, true).toByteArray shouldBe id.bytes
+    }
+    "return a 16 byte array for a 16 byte identifier, padding disabled" in {
+      val id = traceIDFactory.generate()
+      toByteString(id, false).toByteArray.length shouldBe 16
+      toByteString(id, false).toByteArray shouldBe id.bytes
+    }
+    "return a 16 byte array for a 8 byte identifier, padding enabled" in {
+      val id = spanIDFactory.generate()
+      toByteString(id, true).toByteArray.length shouldBe 16
+      toByteString(id, true).toByteArray shouldBe Array.fill[Byte](8)(0)++id.bytes
+    }
+    "return a 8 byte array for a 8 byte identifier, padding disabled" in {
+      val id = spanIDFactory.generate()
+      toByteString(id, false).toByteArray.length shouldBe 8
+      toByteString(id, false).toByteArray shouldBe id.bytes
+    }
   }
 }
