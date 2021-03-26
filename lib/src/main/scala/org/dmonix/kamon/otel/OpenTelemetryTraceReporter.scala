@@ -47,7 +47,6 @@ object OpenTelemetryTraceReporter {
       module
     }
   }
-
 }
 
 import org.dmonix.kamon.otel.OpenTelemetryTraceReporter._

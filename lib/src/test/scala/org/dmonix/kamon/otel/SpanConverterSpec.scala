@@ -18,10 +18,16 @@ package org.dmonix.kamon.otel
 import io.opentelemetry.proto.trace.v1.{InstrumentationLibrarySpans, ResourceSpans, Status, Span => ProtoSpan}
 import org.scalatest.{Matchers, WordSpec}
 import SpanConverter._
+import io.opentelemetry.proto.common.v1.InstrumentationLibrary
+import io.opentelemetry.proto.resource.v1.Resource
+import kamon.tag.TagSet
 import kamon.trace.Identifier.Factory
-import kamon.trace.{Span, Trace}
+import kamon.trace.{Identifier, Span, Trace}
 import kamon.trace.Span.{Kind, Link}
 import kamon.trace.Trace.SamplingDecision
+
+import java.time.Instant
+import java.util.concurrent.TimeUnit
 
 /**
  * Tests for [[SpanConverter]]
@@ -30,6 +36,33 @@ class SpanConverterSpec extends WordSpec with Matchers {
 
   private val spanIDFactory = Factory.EightBytesIdentifier
   private val traceIDFactory = Factory.SixteenBytesIdentifier
+  private val resource =  Resource.newBuilder()
+    .addAttributes(stringKeyValue("service.name", "TestService"))
+    .addAttributes(stringKeyValue("telemetry.sdk.name", "kamon"))
+    .addAttributes(stringKeyValue("telemetry.sdk.language", "scala"))
+    .addAttributes(stringKeyValue("telemetry.sdk.version", "0.0.0"))
+    .build()
+  private val instrumentationLibrary = InstrumentationLibrary.newBuilder().setName("kamon").setVersion("0.0.0").build()
+
+  private def now():Long = System.currentTimeMillis()
+  private def finishedSpan():Span.Finished = {
+    Span.Finished(
+      spanIDFactory.generate(),
+      Trace(traceIDFactory.generate(), SamplingDecision.Sample),
+      Identifier.Empty,
+      "TestOperation",
+      false,
+      false,
+      Instant.ofEpochMilli(now()-500),
+      Instant.now(),
+      Kind.Server,
+      Span.Position.Unknown,
+      TagSet.Empty,
+      TagSet.Empty,
+      Nil,
+      Nil
+    )
+  }
 
   "The span converter" when {
     "using value creator functions" should {
@@ -110,6 +143,22 @@ class SpanConverterSpec extends WordSpec with Matchers {
       val id = spanIDFactory.generate()
       toByteString(id, false).toByteArray.length shouldBe 8
       toByteString(id, false).toByteArray shouldBe id.bytes
+    }
+  }
+
+  "should convert an Instant into nanos since EPOC" in {
+    val now = System.currentTimeMillis()
+    toEpocNano(Instant.ofEpochMilli(now)) shouldBe TimeUnit.NANOSECONDS.convert(now, TimeUnit.MILLISECONDS)
+    toEpocNano(Instant.ofEpochMilli(100)) shouldBe 100*1000000
+  }
+
+  "converting a Kamon to proto span" should {
+    "result in a valid span for a successful kamon span" in {
+      val kamonSpan = finishedSpan()
+      val protoSpan = toProtoSpan(kamonSpan)
+      protoSpan.getTraceId.toByteArray shouldBe kamonSpan.trace.id.bytes
+      protoSpan.getSpanId.toByteArray shouldBe kamonSpan.id.bytes
+      //TODO add some more checks on tags -> labels
     }
   }
 }

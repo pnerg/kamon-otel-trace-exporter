@@ -44,7 +44,6 @@ private[otel] object SpanConverter {
   private[otel] def longKeyValue(key:String, value:Long):KeyValue = anyKeyValue(key,AnyValue.newBuilder().setIntValue(value).build())
 
   private[otel] def toProtoResourceSpan(resource:Resource, instrumentationLibrary:InstrumentationLibrary)(spans:Seq[Span.Finished]):ResourceSpans = {
-
     import collection.JavaConverters._
     val protoSpans = spans.map(toProtoSpan)
 
@@ -65,9 +64,6 @@ private[otel] object SpanConverter {
    * @return
    */
   private[otel] def toProtoSpan(span:Span.Finished):ProtoSpan = {
-    val builder = ProtoSpan.newBuilder()
-    ByteString.copyFrom(span.trace.id.bytes)
-
     //converts Kamon span tags to KeyValue attributes
     val attributes:List[KeyValue] = span.tags.iterator.map(toProtoKeyValue).toList
 
@@ -75,6 +71,7 @@ private[otel] object SpanConverter {
     val links:Seq[ProtoSpan.Link] = span.links.map(toProtoLink)
 
     import collection.JavaConverters._
+    val builder = ProtoSpan.newBuilder()
     builder
       .setTraceId(toByteString(span.trace.id, true))
       .setSpanId(toByteString(span.id, false))
@@ -93,7 +90,7 @@ private[otel] object SpanConverter {
 
     //add optional parent
     val parentId = span.parentId
-    if(!parentId.isEmpty) builder.setParentSpanId(ByteString.copyFrom(parentId.bytes))
+    if(!parentId.isEmpty) builder.setParentSpanId(toByteString(parentId, false))
 
     builder.build()
   }
