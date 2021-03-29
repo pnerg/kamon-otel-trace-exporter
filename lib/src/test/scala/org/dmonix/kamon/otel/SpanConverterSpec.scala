@@ -15,16 +15,17 @@
  */
 package org.dmonix.kamon.otel
 
-import io.opentelemetry.proto.trace.v1.{InstrumentationLibrarySpans, ResourceSpans, Status, Span => ProtoSpan}
-import org.scalatest.{Matchers, WordSpec}
-import SpanConverter._
 import io.opentelemetry.proto.common.v1.InstrumentationLibrary
 import io.opentelemetry.proto.resource.v1.Resource
+import io.opentelemetry.proto.trace.v1.{Span => ProtoSpan}
 import kamon.tag.TagSet
 import kamon.trace.Identifier.Factory
-import kamon.trace.{Identifier, Span, Trace}
 import kamon.trace.Span.{Kind, Link}
 import kamon.trace.Trace.SamplingDecision
+import kamon.trace.{Identifier, Span, Trace}
+import org.dmonix.kamon.otel.CustomMatchers.{ByteStringMatchers, KeyValueMatchers}
+import org.dmonix.kamon.otel.SpanConverter._
+import org.scalatest.{Matchers, WordSpec}
 
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -32,7 +33,8 @@ import java.util.concurrent.TimeUnit
 /**
  * Tests for [[SpanConverter]]
  */
-class SpanConverterSpec extends WordSpec with Matchers {
+class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers with KeyValueMatchers {
+
 
   private val spanIDFactory = Factory.EightBytesIdentifier
   private val traceIDFactory = Factory.SixteenBytesIdentifier
@@ -126,23 +128,23 @@ class SpanConverterSpec extends WordSpec with Matchers {
   "converting a Kamon identifier to a proto bytestring" should {
     "return a 16 byte array for a 16 byte identifier, padding enabled" in {
       val id = traceIDFactory.generate()
-      toByteString(id, true).toByteArray.length shouldBe 16
-      toByteString(id, true).toByteArray shouldBe id.bytes
+      toByteString(id, true) should be16Bytes
+      toByteString(id, true) should equal(id)
     }
     "return a 16 byte array for a 16 byte identifier, padding disabled" in {
       val id = traceIDFactory.generate()
-      toByteString(id, false).toByteArray.length shouldBe 16
-      toByteString(id, false).toByteArray shouldBe id.bytes
+      toByteString(id, false) should be16Bytes
+      toByteString(id, false) should equal(id)
     }
     "return a 16 byte array for a 8 byte identifier, padding enabled" in {
       val id = spanIDFactory.generate()
-      toByteString(id, true).toByteArray.length shouldBe 16
+      toByteString(id, true) should be16Bytes
       toByteString(id, true).toByteArray shouldBe Array.fill[Byte](8)(0)++id.bytes
     }
     "return a 8 byte array for a 8 byte identifier, padding disabled" in {
       val id = spanIDFactory.generate()
-      toByteString(id, false).toByteArray.length shouldBe 8
-      toByteString(id, false).toByteArray shouldBe id.bytes
+      toByteString(id, false) should be8Bytes
+      toByteString(id, false) should equal(id)
     }
   }
 
@@ -156,9 +158,41 @@ class SpanConverterSpec extends WordSpec with Matchers {
     "result in a valid span for a successful kamon span" in {
       val kamonSpan = finishedSpan()
       val protoSpan = toProtoSpan(kamonSpan)
-      protoSpan.getTraceId.toByteArray shouldBe kamonSpan.trace.id.bytes
-      protoSpan.getSpanId.toByteArray shouldBe kamonSpan.id.bytes
-      //TODO add some more checks on tags -> labels
+      compareSpans(kamonSpan, protoSpan)
     }
+  }
+
+  "converting a list of Kamon spans" should {
+    "result in a valid ResorceSpans" in {
+      val kamonSpan = finishedSpan()
+      //assert resource labels
+      val resourceSpans = toProtoResourceSpan(resource, instrumentationLibrary)(Seq(kamonSpan))
+      resourceSpans.getResource.getAttributesList should containStringKV("service.name", "TestService")
+      resourceSpans.getResource.getAttributesList should containStringKV("telemetry.sdk.name", "kamon")
+      resourceSpans.getResource.getAttributesList should containStringKV("telemetry.sdk.language", "scala")
+      resourceSpans.getResource.getAttributesList should containStringKV("telemetry.sdk.version", "0.0.0")
+
+      //all kamon spans should belong to the same instance of InstrumentationLibrarySpans
+      val instSpans = resourceSpans.getInstrumentationLibrarySpansList
+      instSpans.size() should be(1)
+
+      //assert instrumentation labels
+      val instrumentationLibrarySpans = instSpans.get(0)
+      instrumentationLibrarySpans.getInstrumentationLibrary.getName should be("kamon")
+      instrumentationLibrarySpans.getInstrumentationLibrary.getVersion should be("0.0.0")
+
+      //there should be a single span reported
+      val spans = instSpans.get(0).getSpansList
+      spans.size() should be(1)
+
+      //assert span contents
+      compareSpans(kamonSpan, spans.get(0))
+    }
+  }
+
+  def compareSpans(expected:Span.Finished, actual:ProtoSpan) = {
+    actual.getTraceId should equal(expected.trace.id)
+    actual.getSpanId should equal(expected.id)
+    //TODO add some more checks on tags -> labels
   }
 }

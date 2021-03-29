@@ -19,7 +19,8 @@ lazy val lib = (project in file("lib"))
           `kamon-bundle`,
           `exporters-otlp`,
           `grpc-netty`,
-            scalatest % Test
+          `slf4j-simple` % Test,
+          scalatest % Test
         )
   )
 
