@@ -41,6 +41,7 @@ lazy val app = (project in file("app"))
     ),
     libraryDependencies ++= Seq(
       `slf4j-simple`
-    )
+    ),
+    coverageExcludedPackages := "<empty>;.*otel.*"
   )
   .dependsOn(lib)
