@@ -54,21 +54,44 @@ object CustomMatchers {
   trait KeyValueMatchers {
     import java.util.{List => JList}
     import collection.JavaConverters._
-    def containStringKV(key:String, expectedValue:String):Matcher[JList[KeyValue]] = new Matcher[JList[KeyValue]] {
+
+    def containsBooleanKV(key:String, expectedValue:Boolean):Matcher[JList[KeyValue]] = new Matcher[JList[KeyValue]] {
       def apply(left: JList[KeyValue]) = {
-        left.asScala.find(_.getKey.equals(key)).map(_.getValue.getStringValue) match {
-          case None => MatchResult(
-            false,
-            s"No such Key [$key] found",
-            "..."
-          )
-          case Some(value) => MatchResult(
-            value.equals(expectedValue),
-            s"The KeyValue [$key] did not have expected value [$expectedValue] != [$value]",
-            "The identifier is of correct length"
-          )
-        }
+        left.asScala.find(_.getKey.equals(key))
+          .map(_.getValue.getBoolValue)
+          .map(value => compare(key, expectedValue, value))
+          .getOrElse(noSuchKey(key))
       }
     }
+
+    def containsLongKV(key:String, expectedValue:Long):Matcher[JList[KeyValue]] = new Matcher[JList[KeyValue]] {
+      def apply(left: JList[KeyValue]) = {
+        left.asScala.find(_.getKey.equals(key))
+          .map(_.getValue.getIntValue)
+          .map(value => compare(key, expectedValue, value))
+          .getOrElse(noSuchKey(key))
+      }
+    }
+
+    def containStringKV(key:String, expectedValue:String):Matcher[JList[KeyValue]] = new Matcher[JList[KeyValue]] {
+      def apply(left: JList[KeyValue]) = {
+        left.asScala.find(_.getKey.equals(key))
+          .map(_.getValue.getStringValue)
+          .map(value => compare(key, expectedValue, value))
+          .getOrElse(noSuchKey(key))
+      }
+    }
+
+    private def compare(key:String, expected:Any, actual:Any) = MatchResult(
+      actual.equals(expected),
+      s"The KeyValue [$key] did not have expected value [$expected] != [$actual]",
+      "The identifier is of correct value"
+    )
+
+    private def noSuchKey(key:String) = MatchResult(
+      false,
+      s"No such Key [$key] found",
+      "..."
+    )
   }
 }

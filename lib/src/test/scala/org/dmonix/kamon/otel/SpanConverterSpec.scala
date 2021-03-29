@@ -18,7 +18,7 @@ package org.dmonix.kamon.otel
 import io.opentelemetry.proto.common.v1.InstrumentationLibrary
 import io.opentelemetry.proto.resource.v1.Resource
 import io.opentelemetry.proto.trace.v1.{Span => ProtoSpan}
-import kamon.tag.TagSet
+import kamon.tag.{Tag, TagSet}
 import kamon.trace.Identifier.Factory
 import kamon.trace.Span.{Kind, Link}
 import kamon.trace.Trace.SamplingDecision
@@ -48,6 +48,11 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
 
   private def now():Long = System.currentTimeMillis()
   private def finishedSpan():Span.Finished = {
+    val tagSet = TagSet.builder()
+      .add("string.tag", "xyz")
+      .add("boolean.tag", true)
+      .add("long.tag", 69)
+      .build()
     Span.Finished(
       spanIDFactory.generate(),
       Trace(traceIDFactory.generate(), SamplingDecision.Sample),
@@ -59,7 +64,7 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
       Instant.now(),
       Kind.Server,
       Span.Position.Unknown,
-      TagSet.Empty,
+      tagSet,
       TagSet.Empty,
       Nil,
       Nil
@@ -154,6 +159,24 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
     toEpocNano(Instant.ofEpochMilli(100)) shouldBe 100*1000000
   }
 
+  "converting a Kamon tag to a proto KeyValue" should {
+    "convert a string tag to a KeyValue of string type" in {
+      val kv = toProtoKeyValue(TagSet.builder().add("key", "value").build().iterator().next())
+      kv.getKey should be("key")
+      kv.getValue.getStringValue should be("value")
+    }
+    "convert a long tag to a KeyValue of long type" in {
+      val kv = toProtoKeyValue(TagSet.builder().add("key", 69).build().iterator().next())
+      kv.getKey should be("key")
+      kv.getValue.getIntValue should be(69)
+    }
+    "convert a boolean tag to a KeyValue of boolean type" in {
+      val kv = toProtoKeyValue(TagSet.builder().add("key", true).build().iterator().next())
+      kv.getKey should be("key")
+      kv.getValue.getBoolValue should be(true)
+    }
+  }
+
   "converting a Kamon to proto span" should {
     "result in a valid span for a successful kamon span" in {
       val kamonSpan = finishedSpan()
@@ -163,7 +186,7 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
   }
 
   "converting a list of Kamon spans" should {
-    "result in a valid ResorceSpans" in {
+    "result in a valid ResourceSpans" in {
       val kamonSpan = finishedSpan()
       //assert resource labels
       val resourceSpans = toProtoResourceSpan(resource, instrumentationLibrary)(Seq(kamonSpan))
@@ -193,6 +216,12 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
   def compareSpans(expected:Span.Finished, actual:ProtoSpan) = {
     actual.getTraceId should equal(expected.trace.id)
     actual.getSpanId should equal(expected.id)
-    //TODO add some more checks on tags -> labels
+
+    val keyValues = actual.getAttributesList
+    expected.tags.all().foreach{
+      case t: Tag.String  => keyValues should containStringKV(t.key, t.value)
+      case t: Tag.Boolean =>  keyValues should containsBooleanKV(t.key, t.value)
+      case t: Tag.Long    =>  keyValues should containsLongKV(t.key, t.value)
+    }
   }
 }
