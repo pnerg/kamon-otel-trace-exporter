@@ -52,7 +52,7 @@ import org.dmonix.kamon.otel.OpenTelemetryTraceReporter._
  */
 class OpenTelemetryTraceReporter(traceServiceFactory:Config=>TraceService)(implicit ec:ExecutionContext) extends SpanReporter {
   private var traceService:Option[TraceService] = None
-  private var spanConverterFunc:Seq[Span.Finished]=>ResourceSpans = _ => ResourceSpans.newBuilder().build()
+  private var spanConverterFunc:Seq[Span.Finished]=>ResourceSpans = (_ => ResourceSpans.newBuilder().build())
 
   override def reportSpans(spans: Seq[Span.Finished]): Unit = {
     if(!spans.isEmpty) {
