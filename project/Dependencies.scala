@@ -9,7 +9,7 @@ object Dependencies extends AutoPlugin {
      * Compile/hard dependencies
      * ------------------------------
      */
-    val `kamon-bundle` = "io.kamon" %% "kamon-bundle" % "2.1.12"
+    val `kamon-bundle` = "io.kamon" %% "kamon-bundle" % "2.1.14"
     val `exporters-otlp` = "io.opentelemetry" % "opentelemetry-proto" % "0.17.1"
     val `grpc-netty` = "io.grpc" % "grpc-netty" % "1.36.0"
 
