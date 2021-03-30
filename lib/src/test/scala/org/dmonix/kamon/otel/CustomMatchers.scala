@@ -17,16 +17,49 @@ package org.dmonix.kamon.otel
 
 import com.google.protobuf.ByteString
 import io.opentelemetry.proto.common.v1.KeyValue
-import kamon.trace.Identifier
+import kamon.tag.TagSet
+import kamon.trace.Identifier.Factory
+import kamon.trace.Span.Kind
+import kamon.trace.{Identifier, Span, Trace}
+import kamon.trace.Trace.SamplingDecision
 import org.scalatest.matchers.{MatchResult, Matcher}
 
+import java.time.Instant
+
 object CustomMatchers {
+  val spanIDFactory = Factory.EightBytesIdentifier
+  val traceIDFactory = Factory.SixteenBytesIdentifier
+
   /**
    * Converts the provided byte array to a hex string
    * @param buf
    * @return
    */
   def asHex(buf: Array[Byte]): String = buf.map("%02X" format _).mkString
+  def now():Long = System.currentTimeMillis()
+  def finishedSpan():Span.Finished = {
+    val tagSet = TagSet.builder()
+      .add("string.tag", "xyz")
+      .add("boolean.tag", true)
+      .add("long.tag", 69)
+      .build()
+    Span.Finished(
+      spanIDFactory.generate(),
+      Trace(traceIDFactory.generate(), SamplingDecision.Sample),
+      Identifier.Empty,
+      "TestOperation",
+      false,
+      false,
+      Instant.ofEpochMilli(now()-500),
+      Instant.now(),
+      Kind.Server,
+      Span.Position.Unknown,
+      tagSet,
+      TagSet.Empty,
+      Nil,
+      Nil
+    )
+  }
 
   trait ByteStringMatchers {
     def equal(identifier: Identifier):Matcher[ByteString] = new Matcher[ByteString] {

@@ -19,11 +19,10 @@ import io.opentelemetry.proto.common.v1.InstrumentationLibrary
 import io.opentelemetry.proto.resource.v1.Resource
 import io.opentelemetry.proto.trace.v1.{Span => ProtoSpan}
 import kamon.tag.{Tag, TagSet}
-import kamon.trace.Identifier.Factory
 import kamon.trace.Span.{Kind, Link}
 import kamon.trace.Trace.SamplingDecision
-import kamon.trace.{Identifier, Span, Trace}
-import org.dmonix.kamon.otel.CustomMatchers.{ByteStringMatchers, KeyValueMatchers}
+import kamon.trace.{Span, Trace}
+import org.dmonix.kamon.otel.CustomMatchers.{ByteStringMatchers, KeyValueMatchers, _}
 import org.dmonix.kamon.otel.SpanConverter._
 import org.scalatest.{Matchers, WordSpec}
 
@@ -34,10 +33,6 @@ import java.util.concurrent.TimeUnit
  * Tests for [[SpanConverter]]
  */
 class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers with KeyValueMatchers {
-
-
-  private val spanIDFactory = Factory.EightBytesIdentifier
-  private val traceIDFactory = Factory.SixteenBytesIdentifier
   private val resource =  Resource.newBuilder()
     .addAttributes(stringKeyValue("service.name", "TestService"))
     .addAttributes(stringKeyValue("telemetry.sdk.name", "kamon"))
@@ -45,31 +40,6 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
     .addAttributes(stringKeyValue("telemetry.sdk.version", "0.0.0"))
     .build()
   private val instrumentationLibrary = InstrumentationLibrary.newBuilder().setName("kamon").setVersion("0.0.0").build()
-
-  private def now():Long = System.currentTimeMillis()
-  private def finishedSpan():Span.Finished = {
-    val tagSet = TagSet.builder()
-      .add("string.tag", "xyz")
-      .add("boolean.tag", true)
-      .add("long.tag", 69)
-      .build()
-    Span.Finished(
-      spanIDFactory.generate(),
-      Trace(traceIDFactory.generate(), SamplingDecision.Sample),
-      Identifier.Empty,
-      "TestOperation",
-      false,
-      false,
-      Instant.ofEpochMilli(now()-500),
-      Instant.now(),
-      Kind.Server,
-      Span.Position.Unknown,
-      tagSet,
-      TagSet.Empty,
-      Nil,
-      Nil
-    )
-  }
 
   "The span converter" when {
     "using value creator functions" should {
