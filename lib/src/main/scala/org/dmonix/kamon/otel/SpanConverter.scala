@@ -19,9 +19,9 @@ import com.google.protobuf.ByteString
 import io.opentelemetry.proto.common.v1.{AnyValue, InstrumentationLibrary, KeyValue}
 import io.opentelemetry.proto.resource.v1.Resource
 import io.opentelemetry.proto.trace.v1.{InstrumentationLibrarySpans, ResourceSpans, Status, Span => ProtoSpan}
-import kamon.tag.Tag
+import kamon.tag.{Lookups, Tag}
 import kamon.tag.Tag.unwrapValue
-import kamon.trace.Span.Kind
+import kamon.trace.Span.{Kind, TagKeys}
 import kamon.trace.{Identifier, Span}
 import org.slf4j.LoggerFactory
 
@@ -30,7 +30,7 @@ import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 /**
- * Converts Kamon spans to OTel Spans
+ * Converts Kamon spans to OpenTelemetry proto Spans
  */
 private[otel] object SpanConverter {
   private val logger = LoggerFactory.getLogger(SpanConverter.getClass)
@@ -38,18 +38,29 @@ private[otel] object SpanConverter {
   /** 8-bytes worth of zeroes used to pad 8-byte TraceId's  */
   private val eightBytePad = Array.fill[Byte](8)(0)
 
+  /** Creates a AnyValue type KeyValue */
   private[otel] def anyKeyValue(key:String, value:AnyValue):KeyValue = KeyValue.newBuilder().setKey(key.replaceAll("-", ".")).setValue(value).build
+  /** Creates a String type KeyValue */
   private[otel] def stringKeyValue(key:String, value:String):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setStringValue(value).build())
+  /** Creates a Boolean type KeyValue */
   private[otel] def booleanKeyValue(key:String, value:Boolean):KeyValue = anyKeyValue(key, AnyValue.newBuilder().setBoolValue(value).build())
+  /** Creates a Long type KeyValue */
   private[otel] def longKeyValue(key:String, value:Long):KeyValue = anyKeyValue(key,AnyValue.newBuilder().setIntValue(value).build())
 
+  /**
+   * Converts a sequence of Kamon spans to a proto ''ResourceSpans''
+   * @param resource resource information for this instance of the service. Added as resource labels
+   * @param instrumentationLibrary instrumentation library information to add to the exported spans
+   * @param spans The spans to export
+   * @return
+   */
   private[otel] def toProtoResourceSpan(resource:Resource, instrumentationLibrary:InstrumentationLibrary)(spans:Seq[Span.Finished]):ResourceSpans = {
     import collection.JavaConverters._
-    val protoSpans = spans.map(toProtoSpan)
 
+    //it is assumed all spans belong to the same instrumentation library
     val instrumentationLibrarySpans = InstrumentationLibrarySpans.newBuilder()
       .setInstrumentationLibrary(instrumentationLibrary)
-      .addAllSpans(protoSpans.asJava)
+      .addAllSpans(spans.map(toProtoSpan).asJava)
       .build()
 
     ResourceSpans.newBuilder()
@@ -60,11 +71,11 @@ private[otel] object SpanConverter {
 
   /**
    * Converts a Kamon span to a proto span
-   * @param span
+   * @param span the span to convert
    * @return
    */
   private[otel] def toProtoSpan(span:Span.Finished):ProtoSpan = {
-    //converts Kamon span tags to KeyValue attributes
+    //converts Kamon span tags to proto KeyValue attributes
     val attributes:List[KeyValue] = span.tags.iterator.map(toProtoKeyValue).toList
 
     //converts Kamon span links to proto links
@@ -72,9 +83,8 @@ private[otel] object SpanConverter {
 
     import collection.JavaConverters._
     val builder = ProtoSpan.newBuilder()
-    builder
-      .setTraceId(toByteString(span.trace.id, true))
-      .setSpanId(toByteString(span.id, false))
+      .setTraceId(traceIdToByteString(span.trace.id))
+      .setSpanId(spanIdToByteString(span.id))
       .setName(span.operationName)
       .setKind(toProtoKind(span.kind))
       .setStartTimeUnixNano(toEpocNano(span.from))
@@ -90,7 +100,7 @@ private[otel] object SpanConverter {
 
     //add optional parent
     val parentId = span.parentId
-    if(!parentId.isEmpty) builder.setParentSpanId(toByteString(parentId, false))
+    if(!parentId.isEmpty) builder.setParentSpanId(spanIdToByteString(parentId))
 
     builder.build()
   }
@@ -102,15 +112,25 @@ private[otel] object SpanConverter {
    */
   private[otel] def toEpocNano(instant:Instant):Long = TimeUnit.NANOSECONDS.convert(instant.getEpochSecond, TimeUnit.SECONDS) + instant.getNano
 
+  /**
+   * Creates a proto ''Status'' of the Kamon span status
+   * @param span
+   * @return
+   */
   private[otel] def getStatus(span:Span.Finished):Status = {
-    //according to the spec the deprecate code needs to be set for backwards compatibility reasons
+    //according to the spec the deprecated code needs to be set for backwards compatibility reasons
     //https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/trace/v1/trace.proto
     val (status, deprecatedStatus) = if(span.hasError) (Status.StatusCode.STATUS_CODE_ERROR_VALUE, Status.DeprecatedStatusCode.DEPRECATED_STATUS_CODE_UNKNOWN_ERROR_VALUE) else (Status.StatusCode.STATUS_CODE_OK_VALUE, Status.DeprecatedStatusCode.DEPRECATED_STATUS_CODE_OK_VALUE)
-    Status.newBuilder()
+    val builder = Status.newBuilder()
       .setCodeValue(status)
       .setDeprecatedCodeValue(deprecatedStatus)
-      //.setMessage(???) //TODO: Do we have status message we can use?
-      .build()
+
+    //if there is an error message in the span we add it as status message
+    //spec states: "A developer-facing human readable error message."
+    //https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/trace/v1/trace.proto
+    span.tags.get(Lookups.option(TagKeys.ErrorMessage)).foreach(builder.setMessage)
+
+    builder.build()
   }
 
   /**
@@ -154,11 +174,25 @@ private[otel] object SpanConverter {
    */
   private[otel] def toProtoLink(link:Span.Link):ProtoSpan.Link = {
     ProtoSpan.Link.newBuilder()
-      .setTraceId(toByteString(link.trace.id, true))
-      .setSpanId(toByteString(link.spanId, false))
-      //.setTraceState() //TODO add when this becomes accessible in Kamon
+      .setTraceId(traceIdToByteString(link.trace.id))
+      .setSpanId(spanIdToByteString(link.spanId))
       .build()
   }
+
+  /**
+   * Converts the TraceID to a proto ByteString.
+   * Id the identifier is 8-bytes (single) it will be padded to 16-bytes as this is required in OTLP
+   * @param id
+   * @return
+   */
+  private[otel] def traceIdToByteString(id:Identifier):ByteString = toByteString(id, true)
+
+  /**
+   * Converts the SpanID to a proto ByteString
+   * @param id
+   * @return
+   */
+  private[otel] def spanIdToByteString(id:Identifier):ByteString = toByteString(id, false)
 
   /**
    * Converts a Kamon identifier to a proto ByteString
@@ -168,7 +202,7 @@ private[otel] object SpanConverter {
    */
   private[otel] def toByteString(id:Identifier, padTo16bytes:Boolean):ByteString = {
     val bytes = id.bytes
-    //OTLP requires 16-bytes trace identifiers, so if we a 8-byte trace id we need to pad with zeroes
+    //OTLP requires 16-bytes trace identifiers, if we have 8-byte traceid it needs to padded with zeroes
     if(padTo16bytes && id.bytes.length == 8)
       ByteString.copyFrom(eightBytePad++bytes)
     else

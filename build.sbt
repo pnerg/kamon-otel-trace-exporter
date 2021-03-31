@@ -14,14 +14,14 @@ val baseSettings = Seq(
 lazy val lib = (project in file("lib"))
   .settings(baseSettings)
   .settings(
-        name := "kamon-otel-trace-exporter",
-          libraryDependencies ++= Seq(
-          `kamon-bundle`,
-          `exporters-otlp`,
-          `grpc-netty`,
-          `slf4j-simple` % Test,
-          scalatest % Test
-        )
+    name := "kamon-otel-trace-exporter",
+    libraryDependencies ++= Seq(
+      `kamon-bundle`,
+      `exporters-otlp`,
+      `grpc-netty`,
+      `slf4j-simple` % Test,
+      scalatest % Test
+    )
   )
 
 lazy val app = (project in file("app"))

@@ -64,5 +64,4 @@ Span --* Status
 Event --> "*" KeyValue
 Link --> "*" KeyValue
 
-
 @enduml

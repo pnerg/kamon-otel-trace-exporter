@@ -90,6 +90,11 @@ class OpenTelemetryTraceReporter(traceServiceFactory:Config=>TraceService)(impli
     this.traceService = None
   }
 
+  /**
+   * Builds the resource information added as resource labels to the exported traces
+   * @param includeEnvTags
+   * @return
+   */
   private def buildResource(includeEnvTags:Boolean):Resource = {
     val env = Kamon.environment
     val builder = Resource.newBuilder()

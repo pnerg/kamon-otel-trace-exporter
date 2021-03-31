@@ -21,7 +21,7 @@ import io.opentelemetry.proto.trace.v1.{Span => ProtoSpan}
 import kamon.tag.{Tag, TagSet}
 import kamon.trace.Span.{Kind, Link}
 import kamon.trace.Trace.SamplingDecision
-import kamon.trace.{Span, Trace}
+import kamon.trace.{Identifier, Span, Trace}
 import org.dmonix.kamon.otel.CustomMatchers.{ByteStringMatchers, KeyValueMatchers, _}
 import org.dmonix.kamon.otel.SpanConverter._
 import org.scalatest.{Matchers, WordSpec}
@@ -101,6 +101,7 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
   }
 
   "converting a Kamon identifier to a proto bytestring" should {
+    def padded(id:Identifier):Array[Byte] = Array.fill[Byte](8)(0)++id.bytes
     "return a 16 byte array for a 16 byte identifier, padding enabled" in {
       val id = traceIDFactory.generate()
       toByteString(id, true) should be16Bytes
@@ -114,12 +115,27 @@ class SpanConverterSpec extends WordSpec with Matchers with ByteStringMatchers w
     "return a 16 byte array for a 8 byte identifier, padding enabled" in {
       val id = spanIDFactory.generate()
       toByteString(id, true) should be16Bytes
-      toByteString(id, true).toByteArray shouldBe Array.fill[Byte](8)(0)++id.bytes
+      toByteString(id, true).toByteArray shouldBe padded(id)
     }
     "return a 8 byte array for a 8 byte identifier, padding disabled" in {
       val id = spanIDFactory.generate()
       toByteString(id, false) should be8Bytes
       toByteString(id, false) should equal(id)
+    }
+    "return a 16 byte array for a 16 byte identifier, using traceIdToByteString" in {
+      val id = traceIDFactory.generate()
+      traceIdToByteString(id) should be16Bytes
+      traceIdToByteString(id) should equal(id)
+    }
+    "return a 16 byte array for a 8 byte identifier, using traceIdToByteString" in {
+      val id = spanIDFactory.generate()
+      traceIdToByteString(id) should be16Bytes
+      traceIdToByteString(id).toByteArray shouldBe padded(id)
+    }
+    "return a 8 byte array for a 8 byte identifier, using spanIdToByteString" in {
+      val id = spanIDFactory.generate()
+      spanIdToByteString(id) should be8Bytes
+      spanIdToByteString(id) should equal(id)
     }
   }
 

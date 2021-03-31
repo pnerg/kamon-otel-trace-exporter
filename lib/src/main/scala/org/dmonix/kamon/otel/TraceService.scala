@@ -19,12 +19,20 @@ private[otel] trait TraceService extends Closeable {
   def export(request:ExportTraceServiceRequest):Future[ExportTraceServiceResponse]
 }
 
+/**
+ * Companion object to [[GrpcTraceService]]
+ */
 private[otel] object GrpcTraceService {
   private val logger = LoggerFactory.getLogger(classOf[GrpcTraceService])
   private val executor = Executors.newSingleThreadExecutor(new ThreadFactory {
     override def newThread(r: Runnable): Thread = new Thread(r, "OpenTelemetryTraceReporterRemote")
   })
 
+  /**
+   * Builds the gRPC trace exporter using the provided configuration.
+   * @param config
+   * @return
+   */
   def apply(config: Config): GrpcTraceService = {
     val otelExporterConfig = config.getConfig("kamon.otel.trace")
     val protocol = otelExporterConfig.getString("protocol")
@@ -34,7 +42,7 @@ private[otel] object GrpcTraceService {
     //inspiration from https://github.com/open-telemetry/opentelemetry-java/blob/main/exporters/otlp/trace/src/main/java/io/opentelemetry/exporter/otlp/trace/OtlpGrpcSpanExporterBuilder.java
 
     logger.info(s"Configured endpoint for OpenTelemetry trace reporting [${url.getHost}:${url.getPort}]")
-    //TODO : stuff with TLS and possibly time-out settings...and other things I've missed
+    //TODO : possibly add support for trustedCertificates in case TLS is to be enabled
     val builder = ManagedChannelBuilder.forAddress(url.getHost, url.getPort)
     if (protocol.equals("https"))
       builder.useTransportSecurity()
